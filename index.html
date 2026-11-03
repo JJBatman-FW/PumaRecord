@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>沈伯洋爬山開票圖</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;900&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#dfe7e9;--fg:#14212b;--mute:#52656f;--rock:#6e9b57;--lit:#c9822b;--panel:rgba(255,255,255,.78);--edge:rgba(20,33,43,.2);
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1a22;--fg:#eef3f4;--mute:#9bb0ba;--rock:#4c8a56;--lit:#e8c27a;--panel:rgba(15,26,34,.78);--edge:rgba(238,243,244,.25)}}
+:root[data-theme="dark"]{--bg:#0f1a22;--fg:#eef3f4;--mute:#9bb0ba;--rock:#4c8a56;--lit:#e8c27a;--panel:rgba(15,26,34,.78);--edge:rgba(238,243,244,.25)}
+html,body{height:100%;margin:0}
+body{position:relative;overflow:hidden;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif}
+#stage{position:absolute;inset:0}
+canvas{display:block;width:100%;height:100%}
+.tag{position:absolute;transform:translate(-50%,-100%);font-size:12px;line-height:1.3;text-align:center;white-space:nowrap;pointer-events:none;color:var(--mute);transition:color .4s}
+.tag b{display:block;font-size:13px;font-weight:600}
+.tag.on{color:var(--fg)}
+.tag.on b{color:var(--lit)}
+.tag .d{display:none;white-space:normal;width:172px;margin:0 auto 5px;padding:6px 8px;background:var(--panel);border:1px solid var(--edge);border-radius:8px;color:var(--fg);font-size:12px;line-height:1.45}
+.tag.pop{z-index:5}
+.tag.pop .d{display:block}
+#top{position:absolute;left:14px;top:12px;right:14px;pointer-events:none}
+#top h1{margin:0;font:900 18px/1.3 "Noto Serif TC",serif}
+#top p{margin:4px 0 0;font-size:12px;color:var(--mute);max-width:420px;line-height:1.5}
+#hud{position:absolute;left:12px;bottom:12px;width:min(560px,calc(100% - 24px));box-sizing:border-box;background:var(--panel);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid var(--edge);border-radius:12px;padding:12px 14px}
+#num{font:900 clamp(40px,11vw,68px)/1 "Noto Serif TC",serif;font-variant-numeric:tabular-nums}
+#num small{font-size:.3em;font-weight:600;margin-left:.4em;color:var(--mute)}
+#msg{margin:6px 0 10px;font-size:14px;line-height:1.55}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+input{flex:1 1 140px;min-width:0;font:inherit;font-size:16px;padding:8px 10px;border-radius:8px;border:1px solid var(--edge);background:transparent;color:var(--fg)}
+button{font:inherit;font-size:14px;padding:8px 14px;border-radius:8px;border:1px solid var(--edge);background:transparent;color:var(--fg);cursor:pointer}
+button.p{background:var(--lit);border-color:var(--lit);color:#101010;font-weight:600}
+button:focus-visible,input:focus-visible{outline:2px solid var(--lit);outline-offset:2px}
+#src{margin:8px 0 0;font-size:11px;color:var(--mute)}
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div id="top"><h1>沈伯洋的開票爬山</h1><p>山路隨得票數一路往上，路邊每一面旗是一屆歷史紀錄（民進黨或獲民進黨禮讓的候選人）。越過最後一面旗，山路還會繼續。</p></div>
+<div id="hud">
+  <div id="num">0<small>票</small></div>
+  <div id="msg"></div>
+  <div class="row">
+    <input id="v" type="number" inputmode="numeric" min="0" step="1" placeholder="輸入目前得票數" aria-label="目前得票數">
+    <button class="p" id="go">更新</button>
+    <button id="demo">示範</button>
+    <button id="view">全景</button>
+  </div>
+  <p id="src">歷屆資料整理自商業周刊，開票時請以中選會公告為準。</p>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const DATA=[[2018,'姚文智',244342],[2022,'陳時中',434558],[2002,'李應元',488811],[2006,'謝長廷',525829],[1994,'陳水扁',615090,'','民進黨第一次贏得台北市長選舉'],[2010,'蘇貞昌',628129],[1998,'陳水扁',688072,'','民進黨台北市長選舉最高票數'],[2014,'柯文哲',853983,'','非國民黨籍台北市長選舉最高票數'],[2002,'馬英九',873102,'','歷次台北市長選舉最高票數'],[2020,'蔡英文',875854,'','民進黨歷次選舉（含地方、中央）在台北市最高票數'],[2008,'馬英九',1011546,'','歷次選舉（含地方、中央）台北市最高票數']];
+const K=1/50000, SP=9, N=DATA.length, Vs=[0].concat(DATA.map(d=>d[2]));
+const stage=document.getElementById('stage');
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.localClippingEnabled=true;
+stage.appendChild(renderer.domElement);
+const scene=new THREE.Scene();
+scene.fog=new THREE.Fog(0x000000,35,150);
+const cam=new THREE.PerspectiveCamera(45,1,.1,1200);
+scene.add(new THREE.HemisphereLight(0xffffff,0x445566,.9));
+const sun=new THREE.DirectionalLight(0xffffff,.9);sun.position.set(-10,25,20);scene.add(sun);
+
+// 得票數與山路座標的換算：路徑沿 x 前進，每個紀錄間隔固定 SP，高度 = 票數 * K
+function xOf(v){
+ v=Math.max(0,v);
+ if(v>Vs[N])return N*SP+SP*(v-Vs[N])/(Vs[N]-Vs[N-1]);
+ let i=1;while(i<N&&v>Vs[i])i++;
+ return (i-1)*SP+SP*(v-Vs[i-1])/(Vs[i]-Vs[i-1]);
+}
+function yOf(x){
+ if(x<=0)return 0;
+ if(x>N*SP)return (Vs[N]+(Vs[N]-Vs[N-1])*(x-N*SP)/SP)*K;
+ const i=Math.max(1,Math.ceil(x/SP));
+ return (Vs[i-1]+(Vs[i]-Vs[i-1])*(x-(i-1)*SP)/SP)*K;
+}
+const hash=(i,j)=>{const s=Math.sin(i*127.1+j*311.7)*43758.5453;return s-Math.floor(s)};
+
+const base=new THREE.Mesh(new THREE.PlaneGeometry(900,500),new THREE.MeshStandardMaterial({flatShading:true}));
+base.rotation.x=-Math.PI/2;base.position.y=-.08;scene.add(base);
+const far=[];
+for(let i=0;i<22;i++){const h=3+hash(i,1)*10,m=new THREE.Mesh(new THREE.ConeGeometry(5+hash(i,2)*5,h,6),new THREE.MeshStandardMaterial({flatShading:true}));
+ m.position.set(-30+i*8+hash(i,3)*4,h/2-.1,-24-hash(i,4)*24);scene.add(m);far.push(m)}
+
+const clip=new THREE.Plane(new THREE.Vector3(-1,0,0),0);
+const dimMat=new THREE.MeshBasicMaterial({transparent:true,opacity:.85,side:THREE.DoubleSide});
+const glowMat=new THREE.MeshBasicMaterial({clippingPlanes:[clip],side:THREE.DoubleSide});
+const terrainMat=new THREE.MeshStandardMaterial({flatShading:true,vertexColors:true});
+let terrain,trail,glow,ys=[],vmax=0;
+const C={};
+function paint(){
+ if(!terrain)return;
+ const col=terrain.geometry.attributes.color,c=new THREE.Color(),g0=new THREE.Color(0x9ccf6a).lerp(C.bg,.12),mist=new THREE.Color(0xe4ecd8),top=vmax*K;
+ for(let i=0;i<ys.length;i++){
+  const t=Math.min(1,Math.max(0,ys[i]/top));
+  c.copy(g0).lerp(C.rock,Math.min(1,t/.4));
+  if(t>.4)c.lerp(mist,(t-.4)/.6*.4);
+  c.offsetHSL(0,0,(hash(i,9)-.5)*.14);
+  col.setXYZ(i,c.r,c.g,c.b);
+ }
+ col.needsUpdate=true;
+}
+let G,deco=[];
+function hAt(x,z){const{x0,dx,nx,nz,W}=G,fi=Math.min(nx-1,Math.max(0,(x-x0)/dx)),fj=Math.min(nz-1,Math.max(0,(z+W*1.3)/(W*2.6/nz))),i=Math.floor(fi),j=Math.floor(fj),a=fi-i,b=fj-j,at=(p,q)=>ys[p*(nz+1)+q];
+ return (at(i,j)*(1-a)+at(i+1,j)*a)*(1-b)+(at(i,j+1)*(1-a)+at(i+1,j+1)*a)*b}
+function scatter(xe){
+ deco.forEach(m=>{scene.remove(m);m.geometry.dispose();m.material.dispose()});deco=[];
+ const NF=Math.round(xe*16),NG=Math.round(xe*30);
+ const fl=new THREE.InstancedMesh(new THREE.IcosahedronGeometry(.14,0),new THREE.MeshStandardMaterial({flatShading:true}),NF);
+ const gr=new THREE.InstancedMesh(new THREE.ConeGeometry(.07,.55,4),new THREE.MeshStandardMaterial({flatShading:true,color:0x4f8f3a}),NG);
+ const pal=[0xffd23f,0xff7aa8,0xffffff,0xb48cff,0xff9a3c].map(c=>new THREE.Color(c));
+ const m=new THREE.Matrix4(),q=new THREE.Quaternion(),p=new THREE.Vector3(),s=new THREE.Vector3(),e=new THREE.Euler();
+ for(let i=0;i<NF;i++){
+  const x=-10+hash(i,31)*(xe+6),z=(hash(i,32)<.5?-1:1)*(1.4+hash(i,33)*8);
+  p.set(x,hAt(x,z)+.12,z);s.setScalar(.7+hash(i,34)*.9);
+  fl.setMatrixAt(i,m.compose(p,q.identity(),s));fl.setColorAt(i,pal[Math.floor(hash(i,35)*pal.length)]);
+ }
+ for(let i=0;i<NG;i++){
+  const x=-10+hash(i,41)*(xe+6),z=(hash(i,42)<.5?-1:1)*(1.2+hash(i,43)*9);
+  p.set(x,hAt(x,z)+.2,z);s.set(.8+hash(i,44),.6+hash(i,45)*1.2,.8+hash(i,44));
+  e.set((hash(i,46)-.5)*.4,hash(i,47)*6.28,(hash(i,48)-.5)*.4);q.setFromEuler(e);
+  gr.setMatrixAt(i,m.compose(p,q,s));
+ }
+ fl.instanceMatrix.needsUpdate=true;fl.instanceColor.needsUpdate=true;gr.instanceMatrix.needsUpdate=true;
+ scene.add(fl,gr);deco.push(fl,gr);
+}
+function build(vm){
+ vmax=vm;
+ [terrain,trail,glow].forEach(m=>{if(m){scene.remove(m);m.geometry.dispose&&m.geometry.dispose()}});
+ const xe=xOf(vm)+10,x0=-14,W=11,dx=.5,nx=Math.ceil((xe-x0)/dx),nz=36;
+ const P=[],I=[];ys=[];
+ for(let i=0;i<=nx;i++)for(let j=0;j<=nz;j++){
+  const x=x0+i*dx,z=-W*1.3+j*(W*2.6/nz),u=Math.abs(z)/W,ry=yOf(x);
+  let y=ry*Math.max(0,1-u*u);
+  if(u>.14)y+=(hash(i,j)-.5)*(.5+ry*.04);
+  y=Math.max(y,0);
+  P.push(x,y,z);ys.push(y);
+ }
+ for(let i=0;i<nx;i++)for(let j=0;j<nz;j++){const a=i*(nz+1)+j,b=a+nz+1;I.push(a,a+1,b,b,a+1,b+1)}
+ const g=new THREE.BufferGeometry();
+ g.setAttribute('position',new THREE.Float32BufferAttribute(P,3));
+ g.setAttribute('color',new THREE.Float32BufferAttribute(new Float32Array(P.length),3));
+ g.setIndex(I);g.computeVertexNormals();
+ terrain=new THREE.Mesh(g,terrainMat);scene.add(terrain);
+ G={x0,dx,nx,nz,W};scatter(xe);
+ // 山路：貼著山脊中線，由山腳一路鋪到終點之後
+ const T=[],TI=[];let n=0;
+ for(let x=0;x<=xe;x+=.25){const y=yOf(x)+.07;T.push(x,y,-.5,x,y,.5);if(n>0){const a=(n-1)*2;TI.push(a,a+2,a+1,a+1,a+2,a+3)}n++}
+ const tg=new THREE.BufferGeometry();
+ tg.setAttribute('position',new THREE.Float32BufferAttribute(T,3));tg.setIndex(TI);
+ trail=new THREE.Mesh(tg,dimMat);glow=new THREE.Mesh(tg,glowMat);
+ trail.renderOrder=1;glow.renderOrder=2;scene.add(trail,glow);
+ paint();
+}
+
+// 路邊的旗子：每一屆歷史紀錄一面
+const flags=[];
+DATA.forEach((d,i)=>{
+ const x=(i+1)*SP,y=yOf(x),gr=new THREE.Group();
+ gr.position.set(x,y,1);gr.scale.setScalar(1.6);
+ const pole=new THREE.Mesh(new THREE.CylinderGeometry(.04,.04,1.8,6),new THREE.MeshStandardMaterial({color:0xcccccc}));pole.position.y=.9;
+ const cl=new THREE.Mesh(new THREE.PlaneGeometry(.9,.55),new THREE.MeshBasicMaterial({side:THREE.DoubleSide}));cl.position.set(.47,1.5,0);
+ const st=new THREE.Mesh(new THREE.DodecahedronGeometry(.22),new THREE.MeshStandardMaterial({flatShading:true,color:0x888888}));st.position.set(0,.1,0);
+ gr.add(pole,cl,st);scene.add(gr);
+ const el=document.createElement('div');el.className='tag';
+ el.innerHTML=(d[4]?'<div class="d">'+d[4]+'</div>':'')+'<b>'+d[0]+' '+d[1]+(d[3]?'（'+d[3]+'）':'')+'</b>'+d[2].toLocaleString('en-US');
+ document.body.appendChild(el);
+ flags.push({cl,el,x,y:y+3.3,k:0,hover:false});
+});
+
+// 登山的人，手上拿著自己的旗
+const fig=new THREE.Group();
+const bodyM=new THREE.MeshStandardMaterial({color:0x2a2a2a}),flagM=new THREE.MeshBasicMaterial({side:THREE.DoubleSide});
+const body=new THREE.Mesh(new THREE.CylinderGeometry(.1,.17,.5,8),bodyM);body.position.y=.3;
+const headTex=new THREE.TextureLoader().load('data:image/jpeg;base64,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');
+const head=new THREE.Mesh(new THREE.CircleGeometry(.32,40),new THREE.MeshBasicMaterial({map:headTex,side:THREE.DoubleSide}));head.position.set(0,.88,.05);
+const ring=new THREE.Mesh(new THREE.RingGeometry(.31,.36,40),new THREE.MeshBasicMaterial({color:0xffffff,side:THREE.DoubleSide}));ring.position.set(0,.88,.04);
+const fp=new THREE.Mesh(new THREE.CylinderGeometry(.025,.025,1.3,5),new THREE.MeshStandardMaterial({color:0xcccccc}));fp.position.set(.45,.65,.1);
+const fc=new THREE.Mesh(new THREE.PlaneGeometry(.5,.3),flagM);fc.position.set(.72,1.2,.1);
+const fl=new THREE.PointLight(0xffffff,1.2,14);fl.position.set(0,1.2,.6);
+fig.add(body,ring,head,fp,fc,fl);fig.scale.setScalar(1.9);scene.add(fig);
+
+function theme(){
+ const s=getComputedStyle(document.documentElement),g=n=>new THREE.Color(s.getPropertyValue(n).trim());
+ C.bg=g('--bg');C.rock=g('--rock');C.lit=g('--lit');
+ scene.background=C.bg;scene.fog.color.copy(C.bg);
+ base.material.color.copy(C.rock).lerp(C.bg,.55);
+ far.forEach(m=>m.material.color.copy(C.rock).lerp(C.bg,.55));
+ dimMat.color.set(0xd2b98c);
+ glowMat.color.copy(C.lit);flagM.color.copy(C.lit);fl.color.copy(C.lit);
+ paint();
+}
+theme();build(1300000);
+matchMedia('(prefers-color-scheme:dark)').addEventListener('change',theme);
+
+let target=0,shown=0,shownX=0,demoOn=false,demo=0,overview=false,cx=0,cy=0,last=performance.now();
+const $=id=>document.getElementById(id),input=$('v');
+const fmt=n=>Math.round(n).toLocaleString('en-US');
+function message(t=target){
+ let c=0;while(c<N&&t>=Vs[c+1])c++;
+ if(t<=0)return '輸入目前得票數，開始爬山。';
+ if(c===N)return '已走過表上所有紀錄，包含'+DATA[N-1][0]+'年'+DATA[N-1][1]+'的'+fmt(Vs[N])+'票。山路還在往上。';
+ const n=DATA[c];
+ const gone=c>0?'已經過'+c+'面旗，最近一面是'+DATA[c-1][0]+'年'+DATA[c-1][1]+'。':'還在山腳。';
+ return gone+'下一面是'+n[0]+'年'+n[1]+'（'+fmt(n[2])+'票），還差'+fmt(n[2]-t)+'票。';
+}
+function setVotes(v){
+ target=Math.max(0,Math.min(3000000,Math.round(v)||0));demo=0;demoOn=false;
+ if(target>vmax*.85){build(target*1.35);theme()}
+ try{localStorage.setItem('puma-votes',String(target))}catch(e){}
+ $('msg').textContent=message();
+}
+$('go').onclick=()=>setVotes(parseInt(input.value,10));
+input.addEventListener('keydown',e=>{if(e.key==='Enter')setVotes(parseInt(input.value,10))});
+$('demo').onclick=()=>{shown=0;shownX=0;target=1060000;demoOn=true;overview=false;$('view').textContent='全景'};
+$('view').onclick=()=>{overview=!overview;$('view').textContent=overview?'跟隨':'全景'};
+try{const s=parseInt(localStorage.getItem('puma-votes'),10);if(s>0){input.value=s;setVotes(s);shown=s;shownX=xOf(s)}}catch(e){}
+if(!target)$('msg').textContent=message();
+
+function resize(){
+ const w=stage.clientWidth,h=stage.clientHeight;
+ renderer.setSize(w,h,false);cam.aspect=w/h;cam.updateProjectionMatrix();
+}
+addEventListener('resize',resize);resize();
+let mx=-999,my=-999;
+addEventListener('pointermove',e=>{mx=e.clientX;my=e.clientY});
+addEventListener('pointerdown',e=>{mx=e.clientX;my=e.clientY});
+document.addEventListener('pointerleave',()=>{mx=-999;my=-999});
+
+const vec=new THREE.Vector3();
+function frame(now){
+ const dt=Math.min(.05,(now-last)/1000);last=now;
+ const dd=xOf(target)-shownX;
+ shownX+=Math.sign(dd)*Math.min(Math.abs(dd),Math.min(3,.6+Math.abs(dd)*3)*dt);
+ shown=yOf(shownX)/K;
+ if(demoOn){$('msg').textContent=message(shown);if(Math.abs(dd)<.01)demoOn=false}
+ const x=shownX,y=yOf(x),sl=(yOf(x+.05)-yOf(x-.05))/.1;
+ const moving=Math.abs(target-shown)>200;
+ fig.position.set(x,y+(moving?Math.abs(Math.sin(now*.012))*.1:0),0);
+ fig.rotation.z=Math.atan(sl)*.7;
+ clip.constant=x;
+ $('num').firstChild.nodeValue=fmt(shown);
+ const w=stage.clientWidth,h=stage.clientHeight,asp=w/h;
+ const dist=Math.max(26,36/Math.min(1.2,asp*1.1));
+ let tx,ty,tz,lx,ly;
+ if(overview){const xe=Math.max(xOf(Vs[N]*1.08),xOf(shown));tx=xe/2;ty=xe*.3+6;tz=Math.max(60,xe*1.6/Math.min(1.4,asp));lx=tx;ly=yOf(xe)*.4}
+ else{tx=x+6;ty=y*.75+9;tz=dist;lx=x+3;ly=y*.75+1.5}
+ const f=Math.min(1,dt*2.5);
+ cx+=(tx-cx)*f;cy+=(ty-cy)*f;
+ cam.position.set(cx,cy,cam.position.z+(tz-cam.position.z)*f);
+ cam.lookAt(lx,ly,0);
+ const fn=overview?cam.position.z*1.1:35,ff=overview?cam.position.z*3.2:150;
+ scene.fog.near+=(fn-scene.fog.near)*f;scene.fog.far+=(ff-scene.fog.far)*f;
+ flags.forEach((p,i)=>{
+  const on=shown>=DATA[i][2]-1,near=shownX>=p.x-.3&&shownX<=p.x+SP*.8;
+  p.el.classList.toggle('pop',!!DATA[i][4]&&(near||p.hover));
+  p.k+=((on?1:0)-p.k)*Math.min(1,dt*4);
+  p.cl.material.color.copy(C.rock).lerp(C.lit,p.k);
+  p.el.classList.toggle('on',on);
+  vec.set(p.x,p.y,1).project(cam);
+  const vis=vec.z<1&&Math.abs(vec.x)<1.1&&vec.y>-1&&vec.y<1;
+  p.el.style.display=vis?'block':'none';
+  p.el.style.left=((vec.x*.5+.5)*w)+'px';
+  p.el.style.top=((-vec.y*.5+.5)*h)+'px';
+  if(vis){const r=p.el.getBoundingClientRect();p.hover=(mx>r.left-6&&mx<r.right+6&&my>r.top-6&&my<r.bottom+6)||Math.hypot(mx-(r.left+r.right)/2,my-(r.bottom+30))<34}else p.hover=false;
+ });
+ renderer.render(scene,cam);
+ requestAnimationFrame(frame);
+}
+cam.position.set(6,9,36);
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
